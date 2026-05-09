@@ -33,7 +33,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04' || matrix.platform == 'ubuntu-22.04-arm' # This must match the platform value defined above.
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-open
 
       - name: setup node
         uses: actions/setup-node@v4
@@ -53,10 +53,15 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: install frontend dependencies
-        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
-        run: |
-          npm install
-          ./scripts/build-tauri.sh
+        run: npm install
+      
+      - name: build frontend (non-Windows)
+        if: matrix.platform != 'windows-latest'
+        run: ./scripts/build-tauri.sh
+      
+      - name: build frontend (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: C:\Program Files\Git\bin\bash.EXE scripts/build-tauri.sh
 
       - uses: tauri-apps/tauri-action@v0
         env:
