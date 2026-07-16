@@ -1272,40 +1272,67 @@ async function loadCharacterSet(setDirName) {
   const lSortedChars = [];
   const lUnsortedChars = [];
 
-  lCharImageNames.forEach((charImgName) => {
+  lCharImageNames.forEach((charEntry) => {
 
-    let escapedCharImgName = charImgName;
-    if (tauriMode)
-      escapedCharImgName = charImgName.replace(" ", "_");
-    else
-      escapedCharImgName = charImgName.replace(" ", "%20");
+    let charImgName = charEntry;
+    let charConfig = null;
 
-    // Check if this name starts with an index
-    let i = parseInt(charImgName.split("-")[0]);
-    if ((i === NaN) || (!charImgName.startsWith(i.toString()))) {
-      // Doesn't appear to start with an index, so add it to the unsorted list
-      lUnsortedChars.push({
-        imgName: escapedCharImgName,
-        name: charImgName.replace(".png", "").replaceAll("_", " ").replaceAll("%20", " ")
-      });
-      return;
+    // Check if this is a folder character
+    if (!charEntry.endsWith(".png")) {
+
+      charImgName = charEntry + "/" + charEntry.replace(/^\d+-/, "") + ".png";
+
+      charConfig = charEntry + "/config.json";
     }
 
-    // This appears to be indexed
+
+    let escapedCharImgName = charImgName;
+
+    if (tauriMode)
+      escapedCharImgName = escapedCharImgName.replace(" ", "_");
+    else
+      escapedCharImgName = escapedCharImgName.replace(" ", "%20");
+
+
+    let displayName = charEntry
+      .split("/")
+      .pop()
+      .replace(".png", "")
+      .replace(/^\d+-/, "")
+      .replaceAll("_", " ")
+      .replaceAll("%20", " ");
+
+
+    let i = parseInt(charEntry.split("-")[0]);
+
+
     let charInfo = {
       imgName: escapedCharImgName,
-      name: charImgName.replace(i + "-", "").replace(".png", "").replaceAll("_", " ").replaceAll("%20", " ")
+      name: displayName,
+      config: charConfig
     };
 
-    // Make sure it can fit into the sorted list and isn't already present
-    if (i > lSortedChars.length - 1)
-      lSortedChars.length = i + i;
-    if (lSortedChars[i] !== undefined) {
-      // This index is already in the list, so log an error and add it to the unsorted list
-      console.error("More than one character has the index " + i + ". Sorting will not appear as intended.");
+
+    if (isNaN(i) || !charEntry.startsWith(i.toString())) {
       lUnsortedChars.push(charInfo);
       return;
     }
+
+
+    if (i > lSortedChars.length - 1)
+      lSortedChars.length = i + 1;
+
+
+    if (lSortedChars[i] !== undefined) {
+      console.error(
+        "More than one character has the index " + i
+      );
+
+      lUnsortedChars.push(charInfo);
+      return;
+    }
+
+
     lSortedChars[i] = charInfo;
   });
 

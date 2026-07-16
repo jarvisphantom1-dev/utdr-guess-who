@@ -20,36 +20,13 @@ if [ ! -z $TAURI ]; then
   CHARSET_DIR=$ROOT_DIR/build/public/character-sets
   cd $CHARSET_DIR
 
-  for DIRNAME in *; do
+  # Rename all files and directories recursively, replacing spaces with _
+  find . -depth -name "* *" | while read FILE; do
+    NEWFILE=$(echo -n "$FILE" | sed -e 's/ /_/g')
 
-    # Skip any files in this directory
-    if [[ -f $DIRNAME ]]; then
-      continue
+    if [[ "$FILE" != "$NEWFILE" ]]; then
+      mv "$FILE" "$NEWFILE"
     fi
-
-    # Rename all directories, replacing spaces with _
-    PERCENT_ESCAPED_DIRNAME=$(echo -n $DIRNAME | sed -e 's/ /_/g')
-    if [[ ! $DIRNAME == $PERCENT_ESCAPED_DIRNAME ]]; then
-      CMD="mv \"$DIRNAME\" \"$PERCENT_ESCAPED_DIRNAME\""
-      eval $CMD
-    fi
-
-    # Now go into the directory and rename all image files
-    cd "$PERCENT_ESCAPED_DIRNAME"
-
-    for FILENAME in *.png; do
-
-      PERCENT_ESCAPED_FILENAME=$(echo -n $FILENAME | sed -e 's/ /_/g')
-
-      if [[ ! $FILENAME == $PERCENT_ESCAPED_FILENAME ]]; then
-        CMD="mv \"$FILENAME\" \"$PERCENT_ESCAPED_FILENAME\""
-        eval $CMD
-      fi
-
-    done
-
-    cd ..
-
   done
 
 else # Non-Tauri build
@@ -78,6 +55,7 @@ for DIRNAME in *; do
   else
     FIRST_DIR=false
   fi
+
   echo -n '"'$DIRNAME'"' >> $CHARSET_META_FILENAME
 
   # Create a character meta file for this folder
@@ -85,7 +63,19 @@ for DIRNAME in *; do
   echo -n '{"chars":[' > $CHAR_META_FILENAME
 
   FIRST_FILE=true
-  for FILENAME in *.png; do
+
+  # Loop over all character entries
+  for ENTRY in *; do
+
+    # Skip config files
+    if [[ "$ENTRY" == "$CONFIG_FILENAME" ]]; then
+      continue
+    fi
+
+    # Skip generated metadata
+    if [[ "$ENTRY" == "$CHAR_META_FILENAME" ]]; then
+      continue
+    fi
 
     # For entries after the first, we add a comma to separate from the previous entry
     if [ $FIRST_FILE != true ]; then
@@ -93,12 +83,52 @@ for DIRNAME in *; do
     else
       FIRST_FILE=false
     fi
-    echo -n '"'$FILENAME'"' >> $CHAR_META_FILENAME
+
+
+    # Handle direct PNG characters
+    if [[ -f "$ENTRY" && "$ENTRY" == *.png ]]; then
+
+      NAME=$(echo "$ENTRY" | sed 's/.png$//' | sed 's/^[0-9]*-//')
+
+      echo -n '{"name":"'$NAME'","image":"'$ENTRY'","config":null}' >> $CHAR_META_FILENAME
+
+
+    # Handle folder based characters
+    elif [[ -d "$ENTRY" ]]; then
+
+      IMAGE_FILE=""
+
+      # Find the first png inside the character folder
+      for IMAGE in "$ENTRY"/*.png; do
+        if [[ -f "$IMAGE" ]]; then
+          IMAGE_FILE=$(basename "$IMAGE")
+          break
+        fi
+      done
+
+
+      # Only add the character if an image exists
+      if [[ ! -z "$IMAGE_FILE" ]]; then
+
+        NAME=$(echo "$ENTRY" | sed 's/^[0-9]*-//')
+
+        CONFIG_PATH="null"
+
+        if [[ -f "$ENTRY/charconfig.json" ]]; then
+          CONFIG_PATH='"'$ENTRY'/charconfig.json"'
+        fi
+
+        echo -n '{"name":"'$NAME'","image":"'$ENTRY'/'$IMAGE_FILE'","config":'$CONFIG_PATH'}' >> $CHAR_META_FILENAME
+
+      fi
+
+    fi
 
   done
 
   # Finish off the character list
   echo -n ']' >> $CHAR_META_FILENAME
+
 
   # Check if a config file is present for this character set, and include the config if so
   if [[ -f $CONFIG_FILENAME ]]; then
@@ -108,8 +138,10 @@ for DIRNAME in *; do
     echo -n ',"config":null' >> $CHAR_META_FILENAME
   fi
 
+
   # Finish off the file
   echo -n '}' >> $CHAR_META_FILENAME
+
   cd ..
 
 done
