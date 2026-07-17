@@ -1562,6 +1562,10 @@ function flipCard(e) {
 
   if (!gameStarted) {
     e.preventDefault();
+    let config = charConfigs[frameEl.getAttribute("charsetPath")]
+    if (config) {
+      handleConfigPress(frameEl, config)
+    }
     return SelectCharacter(frameEl.getAttribute("charName"))
   }
   const cardClassList = frameEl.closest(".character-card").classList;
