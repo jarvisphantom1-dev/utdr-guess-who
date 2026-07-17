@@ -62,6 +62,18 @@ class SceneSwitchWatcher {
   }
 }
 
+let leftMouseHeld = false;
+
+document.addEventListener("mousedown", (e) => {
+  if (e.button === 0)
+    leftMouseHeld = true;
+});
+
+document.addEventListener("mouseup", (e) => {
+  if (e.button === 0)
+    leftMouseHeld = false;
+});
+
 // Constants and globals
 // ---------------------
 
@@ -74,6 +86,7 @@ const INSTRUCTIONS_SCENE = document.getElementById("instructions-scene");
 const CONTROLS_SCENE = document.getElementById("controls-scene");
 const SETTINGS_SCENE = document.getElementById("settings-scene");
 const CREDITS_SCENE = document.getElementById("credits-scene");
+let charConfigs = []
 
 // Other constants
 const SCREEN_SIZE_BREAKPOINT = 800;
@@ -1209,6 +1222,7 @@ async function loadCharacterSet(setDirName) {
   // If this set is already loaded, do nothing
   if (setDirName === loadedCharset)
     return;
+  charConfigs = []
 
   // Unload scale info, which might change with this new set
   cardScaleInfo = null;
@@ -1272,40 +1286,92 @@ async function loadCharacterSet(setDirName) {
   const lSortedChars = [];
   const lUnsortedChars = [];
 
-  lCharImageNames.forEach((charImgName) => {
+  lCharImageNames.forEach((charEntry) => {
 
-    let escapedCharImgName = charImgName;
-    if (tauriMode)
-      escapedCharImgName = charImgName.replace(" ", "_");
-    else
-      escapedCharImgName = charImgName.replace(" ", "%20");
+    let charImgName = charEntry;
+    let charConfig = null;
 
-    // Check if this name starts with an index
-    let i = parseInt(charImgName.split("-")[0]);
-    if ((i === NaN) || (!charImgName.startsWith(i.toString()))) {
-      // Doesn't appear to start with an index, so add it to the unsorted list
-      lUnsortedChars.push({
-        imgName: escapedCharImgName,
-        name: charImgName.replace(".png", "").replaceAll("_", " ").replaceAll("%20", " ")
-      });
+    // Check if this is a folder character
+    if (typeof charEntry === "object") {
+
+      let charInfo = {
+        imgName: charEntry.image,
+        name: charEntry.name,
+        fullname: charEntry.fullname,
+        config: charEntry.config
+      };
+
+      let i = parseInt((charEntry.fullname || charEntry.name).split("-")[0]);
+
+      if (isNaN(i)) {
+        lUnsortedChars.push(charInfo);
+        return;
+      }
+
+      if (i > lSortedChars.length - 1)
+        lSortedChars.length = i + 1;
+
+      if (lSortedChars[i] !== undefined) {
+        console.error(
+          "More than one character has the index " + i
+        );
+
+        lUnsortedChars.push(charInfo);
+        return;
+      }
+
+      lSortedChars[i] = charInfo;
       return;
     }
 
-    // This appears to be indexed
+
+    let escapedCharImgName = charImgName;
+
+    if (tauriMode)
+      escapedCharImgName = escapedCharImgName.replace(" ", "_");
+    else
+      escapedCharImgName = escapedCharImgName.replace(" ", "%20");
+
+
+    let displayName = charEntry
+      .split("/")
+      .pop()
+      .replace(".png", "")
+      .replace(/^\d+-/, "")
+      .replaceAll("_", " ")
+      .replaceAll("%20", " ");
+
+
+    let i = parseInt(charEntry.split("-")[0]);
+
+
     let charInfo = {
       imgName: escapedCharImgName,
-      name: charImgName.replace(i + "-", "").replace(".png", "").replaceAll("_", " ").replaceAll("%20", " ")
+      name: displayName,
+      config: charConfig
     };
 
-    // Make sure it can fit into the sorted list and isn't already present
-    if (i > lSortedChars.length - 1)
-      lSortedChars.length = i + i;
-    if (lSortedChars[i] !== undefined) {
-      // This index is already in the list, so log an error and add it to the unsorted list
-      console.error("More than one character has the index " + i + ". Sorting will not appear as intended.");
+
+    if (isNaN(i) || !charEntry.startsWith(i.toString())) {
       lUnsortedChars.push(charInfo);
       return;
     }
+
+
+    if (i > lSortedChars.length - 1)
+      lSortedChars.length = i + 1;
+
+
+    if (lSortedChars[i] !== undefined) {
+      console.error(
+        "More than one character has the index " + i
+      );
+
+      lUnsortedChars.push(charInfo);
+      return;
+    }
+
+
     lSortedChars[i] = charInfo;
   });
 
@@ -1348,8 +1414,27 @@ async function loadCharacterSet(setDirName) {
     inspectImgEl.setAttribute("src", charsetPath + "/" + charInfo.imgName);
 
     const frameEl = newCard.querySelector(".character-img-frame");
+    let configDumped = null;
+    if (charInfo.config) {
+      configDumped = loadJSON(charsetPath + "/" + charInfo.config)
+        .catch((err) => {
+          alert("ERROR: Could not load character config from " + charInfo.config + ".\n" +
+            "Try refreshing the page in case this is a temporary issue. The error message received was: \n" + err)
+          console.log(err)
+        }).then((json) => {
+          if (frameEl) {
+            charConfigs[charsetPath + "/" + (charInfo.fullname || "")] = json
+          }
+        });
+    }
+    frameEl.setAttribute("charsetPath", charsetPath + "/" + (charInfo.fullname || ""))
     frameEl.addEventListener("click", flipCard);
     frameEl.addEventListener("dblclick", markCard);
+    frameEl.addEventListener("mouseenter", (e) => {
+      if (leftMouseHeld) {
+        flipCard(e);
+      }
+    });
     frameEl.addEventListener("mousedown", (e) => {
       if (e.button == 1 || e.buttons == 4)
         toggleInspectCard(e);
@@ -1407,7 +1492,27 @@ function flipGuess(e) {
 
   updateNumChars();
 }
+/**
+ * Handles card tap with config
+ * @param {Node} element 
+ * @param {object} config
+ */
+let currentSound = null;
+function handleConfigPress(frameEl, config) {
+  if (!config?.sounds?.length) return;
+  let charsetPath = frameEl.getAttribute("charsetPath")
 
+  const soundPath =
+    config.sounds[Math.floor(Math.random() * config.sounds.length)];
+
+  if (currentSound) {
+    currentSound.pause();
+    currentSound.currentTime = 0;
+  }
+
+  currentSound = new Audio(charsetPath + "/" + soundPath);
+  currentSound.play().catch(console.error);
+}
 /**
  * Flips a card between active and inactive states
  * @param {Event} e 
@@ -1422,6 +1527,11 @@ function flipCard(e) {
   if (!(frameEl = e.currentTarget || e.target))
     frameEl = e;
   const cardClassList = frameEl.closest(".character-card").classList;
+
+  let config = charConfigs[frameEl.getAttribute("charsetPath")]
+  if (config) {
+    handleConfigPress(frameEl, config)
+  }
 
   if (cardClassList.contains("active")) {
     cardClassList.remove("active");
@@ -1441,7 +1551,16 @@ function flipCard(e) {
 function markCard(e) {
   e.preventDefault();
 
-  const cardClassList = e.currentTarget.closest(".character-card").classList;
+  let frameEl;
+  if (!(frameEl = e.currentTarget || e.target))
+    frameEl = e;
+
+  const cardClassList = frameEl.closest(".character-card").classList;
+
+  let config = charConfigs[frameEl.getAttribute("charsetPath")]
+  if (config) {
+    handleConfigPress(frameEl, config)
+  }
 
   if (cardClassList.contains("marked")) {
     cardClassList.remove("marked");
