@@ -90,7 +90,7 @@ for DIRNAME in *; do
 
       NAME=$(echo "$ENTRY" | sed 's/.png$//' | sed 's/^[0-9]*-//')
 
-      echo -n '{"name":"'$NAME'","image":"'$ENTRY'","config":null}' >> $CHAR_META_FILENAME
+      echo -n '{"fullname": "'$ENTRY'", "name":"'$NAME'","image":"'$ENTRY'","config":null}' >> $CHAR_META_FILENAME
 
 
     # Handle folder based characters
@@ -114,11 +114,11 @@ for DIRNAME in *; do
 
         CONFIG_PATH="null"
 
-        if [[ -f "$ENTRY/charconfig.json" ]]; then
-          CONFIG_PATH='"'$ENTRY'/charconfig.json"'
+        if [[ -f "$ENTRY/config.json" ]]; then
+          CONFIG_PATH='"'$ENTRY'/config.json"'
         fi
 
-        echo -n '{"name":"'$NAME'","image":"'$ENTRY'/'$IMAGE_FILE'","config":'$CONFIG_PATH'}' >> $CHAR_META_FILENAME
+        echo -n '{"fullname": "'$ENTRY'","name":"'$NAME'","image":"'$ENTRY'/'$IMAGE_FILE'","config":'$CONFIG_PATH'}' >> $CHAR_META_FILENAME
 
       fi
 
